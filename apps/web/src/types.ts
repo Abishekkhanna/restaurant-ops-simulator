@@ -1,0 +1,21 @@
+export type Role = 'SERVER' | 'MANAGER' | 'COOK' | 'DISHWASHER';
+export type Employee = { id: string; employeeNo: string; name: string; role: Role; status: string; station: string | null };
+export type MenuItem = { id: string; categoryId: string; tamilName: string; englishName: string; description: string; pricePaise: number; vegetarian: boolean; station: string; prepSeconds: number; allergens: string | null; available: boolean; active: boolean };
+export type MenuCategory = { id: string; name: string; sortOrder: number; items: MenuItem[] };
+export type OrderItem = { id: string; quantity: number; status: string; unitPricePaise: number; specialInstructions?: string | null; failureReason?: string | null; menuItem: MenuItem; preparationTask?: PrepTask | null };
+export type Order = { id: string; orderNo: string; status: string; createdAt: string; items: OrderItem[] };
+export type Session = { id: string; partySize: number; seatedAt: string; status: string; server: Pick<Employee, 'id' | 'name' | 'status'>; orders: Order[]; bill?: { totalPaise: number; subtotalPaise: number; taxPaise: number; discountPaise?: number } | null };
+export type DiningTable = { id: string; tableNo: string; capacity: number; status: string; currentSession: Session | null };
+export type PrepTask = { id: string; status: string; progress: number; station: string; expectedAt: string | null; cook: Employee | null; orderItem: OrderItem & { order: { orderNo: string; session: { table: { tableNo: string } } } } };
+export type PickupTask = { id: string; status: string; serverId: string | null; server: Employee | null; item: OrderItem & { order: { session: { table: { tableNo: string }; server: Employee } } } };
+export type Vessel = { id: string; name: string; cleanQty: number; inUseQty: number; dirtyQty: number; washingQty: number; damagedQty: number; lowStockAt: number };
+export type WashTask = { id: string; quantity: number; status: string; employee: Employee | null; vesselType: Vessel };
+export type Ingredient = { id: string; name: string; unit: string; lowStockAt: string; stock: { quantity: string } | null; movements: { id: string; type: string; quantity: string; reason: string; createdAt: string }[] };
+export type Settings = { speed: number; paused: boolean; taxRateBasisPoints: number; reworkSeconds: number; pickupDeadlineSeconds: number };
+export type Dashboard = {
+  restaurant: { tamilName: string; englishName: string; operating: boolean; serverTime: string };
+  metrics: { revenuePaise: number; activeOrders: number; availableTables: number; occupiedTables: number; kitchenBacklog: number; waitingPickup: number; availableStaff: number; totalStaff: number };
+  tables: DiningTable[]; staff: Employee[]; alerts: { id: string; type: string; name: string; quantity: string }[];
+  activity: { id: string; action: string; entityType: string; createdAt: string; employeeName: string; details: unknown }[];
+  settings: Settings;
+};

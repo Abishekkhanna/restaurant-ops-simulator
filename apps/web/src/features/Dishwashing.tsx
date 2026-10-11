@@ -1,0 +1,16 @@
+import { useState } from 'react';
+import { Check, CircleAlert, Droplets, Play, Sparkles, WashingMachine } from 'lucide-react';
+import { StatusBadge } from '../components/StatusBadge';
+import type { Employee, Vessel, WashTask } from '../types';
+
+export function Dishwashing({ types, tasks, employee, busy, onStart }: { types: Vessel[]; tasks: WashTask[]; employee?: Employee; busy: boolean; onStart: (id: string) => Promise<void> }) {
+  const [showHistory, setShowHistory] = useState(false);
+  const queue = tasks.filter((task) => ['QUEUED', 'ASSIGNED'].includes(task.status));
+  const active = tasks.filter((task) => task.status === 'IN_PROGRESS');
+  const canWash = employee?.role === 'DISHWASHER' || employee?.role === 'MANAGER';
+  return <div className="view-stack">
+    <div className="view-heading"><div><span className="section-kicker">BACK OF HOUSE · WASH AREA</span><h1>Vessels & wash <span>பாத்திரங்கள்</span></h1><p>Dirty batches stay tied to the dining session until every vessel is washed and sanitized.</p></div><div className="shift-pill"><Droplets size={15} /> Clean stock tracked</div></div>
+    <div className="vessel-stock-grid">{types.map((vessel) => { const low = vessel.cleanQty <= vessel.lowStockAt; return <article className={`vessel-stock-card ${low ? 'low' : ''}`} key={vessel.id}><div className="vessel-icon"><WashingMachine size={18} /></div><div className="vessel-stock-name"><b>{vessel.name}</b><span>{low ? <><CircleAlert size={13} /> Low clean stock</> : 'Available for service'}</span></div><strong>{vessel.cleanQty}</strong><small>clean</small><div className="vessel-breakdown"><span>In use <b>{vessel.inUseQty}</b></span><span>Dirty <b>{vessel.dirtyQty}</b></span><span>Washing <b>{vessel.washingQty}</b></span><span>Discarded <b>{vessel.damagedQty}</b></span></div></article>; })}{!types.length && <div className="empty-state panel"><WashingMachine size={24} /><span>Vessel inventory will appear after the seed adds the standard stock types.</span></div>}</div>
+    <section className="panel wash-panel"><div className="panel-heading"><div><span className="section-kicker">DISHWASHING QUEUE</span><h2>Dirty batches <span className="count-bubble">{queue.length + active.length}</span></h2></div><button className="link-button" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide finished' : 'Show finished'}</button></div><div className="wash-task-list">{[...tasks.filter((task) => showHistory || task.status !== 'COMPLETED')].map((task) => <article className="wash-task" key={task.id}><div className="wash-task-symbol"><Droplets size={17} /></div><div className="wash-task-info"><b>{task.quantity} × {task.vesselType.name}</b><span>{task.employee?.name ?? (task.status === 'QUEUED' ? 'Waiting for dishwasher' : 'Assigned')}</span></div><StatusBadge value={task.status} />{['QUEUED', 'ASSIGNED'].includes(task.status) && <button className="button button-leaf" disabled={busy || !canWash} onClick={() => void onStart(task.id)}><Play size={14} /> Start wash & sanitize</button>}{task.status === 'COMPLETED' && <span className="wash-complete"><Check size={14} /> Clean & sanitized</span>}</article>)}{!tasks.length && <div className="empty-state compact"><Sparkles size={22} /><span>No table has generated a dirty batch yet.</span></div>}</div></section>
+  </div>;
+}
