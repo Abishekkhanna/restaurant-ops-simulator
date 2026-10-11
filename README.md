@@ -9,7 +9,8 @@ A local full-stack restaurant operations simulator inspired by Tamil Nadu restau
 - Kitchen task assignment, persisted preparation timing, quality checks, rework, pickup, and per-item delivery confirmation.
 - Ingredient stock checks for the seeded sample recipes, vessel tracking, table cleanup and washing tasks.
 - Manager controls for staff availability, menu availability, simulation settings and audit history.
-- Responsive Tamil Nadu themed interface.
+- Responsive operations interface with a Three.js restaurant scene: selectable tables, 3D dining furniture and stations, camera orbit/zoom controls, and staff characters that walk to destinations derived from assigned preparation, pickup, delivery and washing tasks. Scene movement visualizes backend state; operational actions still require API confirmation.
+- Persistent POS dock with a per-table order draft, live menu, existing item statuses, server-calculated bill workflow and compact mobile drawer.
 
 The app uses a shared local development token and employee selector. This is not production authentication. Sample recipe inventory consumption currently covers idli, masala dosa and filter coffee. Payment is recorded locally; there is no payment provider. The scheduler is a single-process worker, so run one API instance per database.
 
@@ -88,6 +89,6 @@ See [docs/API.md](docs/API.md) for endpoints, [docs/DATABASE.md](docs/DATABASE.m
 
 - Local bearer token and employee selector are development-only authentication.
 - Only the three seeded recipes listed above currently consume ingredient inventory.
-- There is no external payment gateway, reservations/arrival simulator, or 3D floor simulation.
+- There is no external payment gateway or reservations/arrival simulator.
 - The scheduler is safe for a single API process; multi-instance locking is not implemented.
 - Run the manual verification checklist after migrations and seed. Builds, tests, database connectivity and runtime behavior must be verified in the target environment.

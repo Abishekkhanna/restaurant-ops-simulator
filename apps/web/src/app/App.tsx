@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, LoaderCircle, RefreshCw } from 'lucide-react';
 import { Shell, type ViewKey } from '../components/Shell';
+import { BillingDock, type DraftLine } from '../components/BillingDock';
 import { Overview } from '../features/dashboard/Overview';
 import { Floor } from '../features/tables/Floor';
 import { Kitchen } from '../features/kitchen/Kitchen';
@@ -14,10 +15,11 @@ type VesselResponse = { types: Vessel[]; tasks: WashTask[] };
 type PageData = { dashboard: Dashboard; employees: Employee[]; menu: MenuCategory[]; orders: Order[]; tasks: PrepTask[]; pickups: PickupTask[]; vessels: VesselResponse; ingredients: Ingredient[] };
 
 export function App() {
-  const [view, setView] = useState<ViewKey>('overview');
+  const [view, setView] = useState<ViewKey>('floor');
   const [data, setData] = useState<PageData | null>(null);
   const [employeeId, setEmployeeId] = useState(getActiveEmployee());
   const [selectedTable, setSelectedTable] = useState('');
+  const [draftsByTable, setDraftsByTable] = useState<Record<string, DraftLine[]>>({});
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,10 @@ export function App() {
   useEffect(() => { if (data && employeeId && !data.employees.some((employee) => employee.id === employeeId)) { setEmployeeId(''); setActiveEmployee(''); } }, [data, employeeId]);
 
   const employee = useMemo(() => data?.employees.find((person) => person.id === employeeId), [data, employeeId]);
+  const draft = draftsByTable[selectedTable] ?? [];
+  const setDraft = useCallback((next: DraftLine[] | ((current: DraftLine[]) => DraftLine[])) => {
+    setDraftsByTable((current) => ({ ...current, [selectedTable]: typeof next === 'function' ? next(current[selectedTable] ?? []) : next }));
+  }, [selectedTable]);
   const run = useCallback(async (action: () => Promise<unknown>, success: string) => {
     setBusy(true); setNotice('');
     try { await action(); await reload(); setNotice(success); window.setTimeout(() => setNotice(''), 3500); }
@@ -53,7 +59,14 @@ export function App() {
 
   const changeEmployee = (id: string) => { setEmployeeId(id); setActiveEmployee(id); };
   const seat = (tableNo: string, partySize: number, serverId?: string) => run(() => api(`/api/tables/${tableNo}/seat`, { method: 'POST', body: JSON.stringify({ partySize, serverId }) }), `${tableNo} seated. Vessel stock reserved.`);
-  const order = (tableNo: string, items: Array<{ menuItemId: string; quantity: number; specialInstructions?: string }>) => run(() => api('/api/orders', { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify({ tableNo, items }) }), 'Order sent to the kitchen.');
+  const order = async (tableNo: string, items: Array<{ menuItemId: string; quantity: number; specialInstructions?: string }>) => {
+    setBusy(true); setNotice('');
+    try {
+      await api('/api/orders', { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify({ tableNo, items }) });
+      await reload(); setNotice('Order sent to the kitchen.'); window.setTimeout(() => setNotice(''), 3500); return true;
+    } catch (e) { setError(e instanceof Error ? e.message : 'Order could not be submitted.'); return false; }
+    finally { setBusy(false); }
+  };
   const pay = (sessionId: string) => run(() => api(`/api/sessions/${sessionId}/payments`, { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify({ method: 'CASH' }) }), 'Payment recorded.');
   const discount = (sessionId: string, discountPaise: number) => run(() => api(`/api/sessions/${sessionId}/discount`, { method: 'POST', body: JSON.stringify({ discountPaise }) }), 'Manager discount applied.');
   const cleanup = (tableNo: string) => run(() => api(`/api/tables/${tableNo}/cleanup`, { method: 'POST', body: '{}' }), 'Cleanup tasks created.');
@@ -70,12 +83,16 @@ export function App() {
   const cancelItem = (id: string, reason: string) => run(() => api(`/api/orders/items/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }), 'Order item cancelled with audit entry.');
   const retryItem = (id: string) => run(() => api(`/api/orders/items/${id}/retry`, { method: 'POST', body: '{}' }), 'Blocked item returned to the kitchen queue.');
 
-  return <Shell view={view} setView={setView} employees={data?.employees ?? []} employee={employee} onEmployee={changeEmployee} connected={connected} time={clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}>
+  const selectedDiningTable = data?.dashboard.tables.find((table) => table.tableNo === selectedTable);
+  const draftTotal = draft.reduce((sum, line) => sum + line.menuItem.pricePaise * line.quantity, 0);
+  const billingTotal = selectedDiningTable?.currentSession?.bill?.totalPaise ?? draftTotal;
+
+  return <Shell view={view} setView={setView} employees={data?.employees ?? []} employee={employee} onEmployee={changeEmployee} connected={connected} time={clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} billingTotal={billingTotal} billing={data ? <BillingDock dashboard={data.dashboard} categories={data.menu} employee={employee} selectedTable={selectedTable} onSelectTable={setSelectedTable} draft={draft} setDraft={setDraft} busy={busy} onSeat={seat} onOrder={order} onPay={pay} onCleanup={cleanup} onDiscount={discount} /> : <div className="dock-loading"><LoaderCircle size={20} className="spin" /> Loading billing data…</div>}>
     {error && <div className="error-banner"><AlertCircle size={17} /><span>{error}</span><button onClick={() => void reload()}><RefreshCw size={14} /> Retry</button></div>}
     {notice && <div className="success-toast"><span>✓</span>{notice}</div>}
     {loading && !data ? <div className="loading-page"><LoaderCircle size={26} className="spin" /><b>Connecting to Madurai Manvasanai</b><span>Loading current tables, kitchen work and menu from the restaurant API…</span></div> : data ? <>
       {view === 'overview' && <Overview dashboard={data.dashboard} orders={data.orders} onNavigate={setView} />}
-      {view === 'floor' && <Floor dashboard={data.dashboard} categories={data.menu} employee={employee} selectedTable={selectedTable} onSelectTable={setSelectedTable} busy={busy} onSeat={seat} onOrder={order} onPay={pay} onCleanup={cleanup} onDiscount={discount} />}
+      {view === 'floor' && <Floor dashboard={data.dashboard} employee={employee} selectedTable={selectedTable} onSelectTable={setSelectedTable} tasks={data.tasks} pickups={data.pickups} washTasks={data.vessels.tasks} busy={busy} onSeat={seat} onQuality={quality} onPickup={pickup} onDeliver={deliver} onStartWash={startWash} />}
       {view === 'kitchen' && <Kitchen tasks={data.tasks} employee={employee} busy={busy} onQuality={quality} />}
       {view === 'servers' && <Service dashboard={data.dashboard} pickups={data.pickups} employee={employee} busy={busy} onPickup={pickup} onDeliver={deliver} />}
       {view === 'wash' && <Dishwashing types={data.vessels.types} tasks={data.vessels.tasks} employee={employee} busy={busy} onStart={startWash} />}
